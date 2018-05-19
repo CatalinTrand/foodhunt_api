@@ -9,7 +9,7 @@ import java.util.regex.Pattern;
 
 /**
  * Created by Catalin on 15/05/2018.
-   ---- catalin.lgg3@gmail.com ----
+ * ---- catalin.lgg3@gmail.com ----
  */
 
 class ServerGetter extends Thread {
@@ -54,11 +54,26 @@ class ServerGetter extends Thread {
                             currentMagazin = FoodHunt.Magazin.CARREFOUR;
                         else {
                             String[] attributes = product.split(":::");
-                            FoodHunt.Product produs = new FoodHunt.Product(attributes[0], attributes[1], attributes[2], attributes[3], Float.parseFloat(attributes[4]), Float.parseFloat(attributes[5]));
-                            if (currentMagazin == FoodHunt.Magazin.KAUFLAND)
-                                produseKaufland.add(produs);
-                            else if (currentMagazin == FoodHunt.Magazin.CARREFOUR)
-                                produseCarrefour.add(produs);
+
+                            if(attributes.length == 6) {
+                                attributes[2] = attributes[2].replace(",", ".");
+                                attributes[3] = attributes[3].replace(",", ".");
+
+                                float vechi = 0;
+                                float nou = 0;
+
+                                try {
+                                    vechi = Float.parseFloat(attributes[2]);
+                                    nou = Float.parseFloat(attributes[3]);
+                                } catch (Exception ignored) {
+                                }
+
+                                FoodHunt.Product produs = new FoodHunt.Product(attributes[0], attributes[1], attributes[4], attributes[5], vechi, nou);
+                                if (currentMagazin == FoodHunt.Magazin.KAUFLAND)
+                                    produseKaufland.add(produs);
+                                else if (currentMagazin == FoodHunt.Magazin.CARREFOUR)
+                                    produseCarrefour.add(produs);
+                            }
                         }
                     }
                 }
@@ -77,16 +92,19 @@ class ServerGetter extends Thread {
             for (String magazin : magazine) {
 
                 String[] attributes = magazin.split(":::");
-                FoodHunt.Magazin current = null;
 
-                if(attributes[0].startsWith("Kaufland"))
-                    current = FoodHunt.Magazin.KAUFLAND;
-                else if(attributes[0].startsWith("Carrefour"))
-                current = FoodHunt.Magazin.CARREFOUR;
+                if(attributes.length == 3) {
+                    FoodHunt.Magazin current = null;
 
-                //nume,lat,lng
-                FoodHunt.MagazinMap magazinMap = new FoodHunt.MagazinMap(current,Double.parseDouble(attributes[1]),Double.parseDouble(attributes[2]));
-                magazins.add(magazinMap);
+                    if (attributes[0].startsWith("Kaufland"))
+                        current = FoodHunt.Magazin.KAUFLAND;
+                    else if (attributes[0].startsWith("Carrefour"))
+                        current = FoodHunt.Magazin.CARREFOUR;
+
+                    //nume,lat,lng
+                    FoodHunt.MagazinMap magazinMap = new FoodHunt.MagazinMap(current, Double.parseDouble(attributes[1]), Double.parseDouble(attributes[2]));
+                    magazins.add(magazinMap);
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -109,6 +127,8 @@ public class FoodHunt {
         produseKaufland = new Vector<>();
         produseCarrefour = new Vector<>();
         magazine = new Vector<>();
+
+        loadAllProductsFromServer();
     }
 
     static class Tuple{
@@ -118,6 +138,10 @@ public class FoodHunt {
         Tuple(MagazinMap magazinMap, Product product){
             this.magazinMap = magazinMap;
             this.product = product;
+        }
+
+        public String toString(){
+            return magazinMap + " - " + product;
         }
     }
 
@@ -131,6 +155,10 @@ public class FoodHunt {
             this.latitude = latitude;
             this.longitude = longitude;
         }
+
+        public String toString(){
+            return magazin + " - LAT: "+ latitude + ",LNG: " + longitude;
+        }
     }
 
     static class Product {
@@ -142,10 +170,10 @@ public class FoodHunt {
         float pretNou;
 
         Product(String name, String category, String quanity, String photoURL, float pretVechi, float pretNou) {
-            this.name = name;
-            this.category = category;
-            this.quanity = quanity;
-            this.photoURL = photoURL;
+            this.name = name.replace("\t","").replace("  ","");
+            this.category = category.replace("\t","").replace("  ","");
+            this.quanity = quanity.replace("\t","").replace("  ","");
+            this.photoURL = photoURL.replace("\t","").replace("  ","");
             this.pretVechi = pretVechi;
             this.pretNou = pretNou;
         }
@@ -156,6 +184,10 @@ public class FoodHunt {
                     return false;
 
             return true;
+        }
+
+        public String toString(){
+            return name + ", " + category + ", "+quanity + ", " + pretVechi + " -> " + pretNou + ";";
         }
     }
 
@@ -171,7 +203,7 @@ public class FoodHunt {
         return magazine;
     }
 
-    void loadAllProductsFromServer() {
+    private void loadAllProductsFromServer() {
         ServerGetter serverGetter = new ServerGetter();
         try {
             serverGetter.start();
@@ -239,9 +271,17 @@ public class FoodHunt {
         Product bestKaufland = lowestPrice(prodKaufland);
         Product bestCarrefour = lowestPrice(prodCarrefour);
 
-        assert bestKaufland != null;
-        assert bestCarrefour != null;
+        //avoid exceptions
+        if(bestKaufland == null)
+            if(bestCarrefour == null)
+                return null;
+            else
+                return new Tuple(getClosestStore(Magazin.CARREFOUR,lat,lng),bestCarrefour);
 
+        if(bestCarrefour == null)
+            return new Tuple(getClosestStore(Magazin.KAUFLAND,lat,lng),bestKaufland);
+
+        //normal logic
         if(bestKaufland.pretNou < bestCarrefour.pretNou)
             return new Tuple(getClosestStore(Magazin.KAUFLAND,lat,lng),bestKaufland);
 
